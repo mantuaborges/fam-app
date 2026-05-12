@@ -15928,25 +15928,20 @@ function FamRoot() {
       famLog('Auth: ' + event);
       try {
         if (sbSession?.user) {
-          famLog('User found: ' + sbSession.user.email + '. Loading family...');
+          famLog('User found: ' + sbSession.user.email);
           const result = await loadUserSession(sbSession.user);
-          famLog(result ? 'Family loaded!' : 'No family data found');
-          if (result) setSession(result); else setSession(null);
+          famLog(result ? 'Family loaded!' : 'No family found');
+          setSession(result || null);
         } else {
-          famLog('No active session - showing login');
+          famLog('No session - showing login');
           setSession(null);
         }
       } catch(e) {
         famLog('Error: ' + e.message);
-        console.error('Auth error:', e);
         setSession(null);
       } finally {
-        setReady(true);  // ALWAYS mark ready so app never stays stuck
+        setReady(true);
       }
-      if (false) {  // dead code to close original else block
-        setSession(null);
-      }
-      setReady(true);
     });
     return () => {
       clearTimeout(timeout);
