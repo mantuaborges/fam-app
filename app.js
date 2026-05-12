@@ -40,7 +40,7 @@ class SectionErrorBoundary extends React.Component{constructor(props){super(prop
 // ╔══════════════════════════════════════════════════════════════╗
 // ║              SUPABASE SETUP — READ BEFORE LAUNCH             ║
 // ╠══════════════════════════════════════════════════════════════╣
-// ║  1. Create a free Supabase project at https://_supabaseClient.com   ║
+// ║  1. Create a free Supabase project at https://supabase.com   ║
 // ║                                                              ║
 // ║  2. In the SQL editor, run this schema:                      ║
 // ║                                                              ║
@@ -114,7 +114,7 @@ class SectionErrorBoundary extends React.Component{constructor(props){super(prop
 // ║  4. In Auth → Settings, enable email/password sign-ins.      ║
 // ╚══════════════════════════════════════════════════════════════╝
 
-const SUPABASE_URL = "https://YOUR_PROJECT._supabaseClient.co"; // ← replace
+const SUPABASE_URL = "https://whjrsccqiqhzxxeqxqwi.supabase.co"; // ← replace
 const SUPABASE_ANON_KEY = "sb_publishable_ScETMI7MwyhIvi5uxubc-A_PYLlMbcw"; // ← replace
 
 const _supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -122,11 +122,11 @@ const _supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Helper: fetch the family row + memberships for the signed-in user.
 // Returns { user, family, memberships, users } or null on error.
 async function loadUserSession(sbUser) {
-  famLog('Loading session...');
+  famLog("Loading session...");
   const { data: mems, error: memErr } = await _supabaseClient.from("memberships").select("*").eq("user_id", sbUser.id);
-  if (memErr) { famLog('DB error: ' + memErr.message); return null; }
-  if (!mems || !mems.length) { famLog('No membership found'); return null; }
-  famLog('Found family, loading data...');
+  if (memErr) { famLog("DB error: " + memErr.message); return null; }
+  if (!mems || !mems.length) { famLog("No membership found"); return null; }
+  famLog("Found membership, loading family...");
   const familyId = mems[0].family_id;
 
   // 2. Get the family row
@@ -1195,7 +1195,7 @@ function InviteJoin({
 // ── Google Calendar integration ───────────────────────────────
 // All Google Calendar API calls go through the Supabase Edge Function.
 
-const GCAL_FUNCTION_URL = "https://whjrsccqiqhzxxeqxqwi._supabaseClient.co/functions/v1/google-calendar-auth";
+const GCAL_FUNCTION_URL = "https://whjrsccqiqhzxxeqxqwi.supabase.co/functions/v1/google-calendar-auth";
 
 // Helper: call the Edge Function with the user's auth token
 async function gcalCall(action, method = "GET", body = null) {
