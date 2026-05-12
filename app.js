@@ -15918,22 +15918,32 @@ function FamRoot() {
     // onAuthStateChange fires immediately with the persisted session.
     // We add a 6-second timeout so the app never gets stuck loading
     // (e.g. if Supabase tables haven't been created yet).
-    const timeout = setTimeout(() => setReady(true), 6000);
+    const timeout = setTimeout(() => { famLog("Timeout - showing login"); setReady(true); }, 3000);
     const {
       data: {
         subscription
       }
     } = _supabaseClient.auth.onAuthStateChange(async (event, sbSession) => {
       clearTimeout(timeout);
-      if (sbSession?.user) {
-        try {
+      famLog('Auth: ' + event);
+      try {
+        if (sbSession?.user) {
+          famLog('User found: ' + sbSession.user.email + '. Loading family...');
           const result = await loadUserSession(sbSession.user);
-          if (result) setSession(result);else setSession(null);
-        } catch (e) {
-          console.error('Session load error:', e);
+          famLog(result ? 'Family loaded!' : 'No family data found');
+          if (result) setSession(result); else setSession(null);
+        } else {
+          famLog('No active session - showing login');
           setSession(null);
         }
-      } else {
+      } catch(e) {
+        famLog('Error: ' + e.message);
+        console.error('Auth error:', e);
+        setSession(null);
+      } finally {
+        setReady(true);  // ALWAYS mark ready so app never stays stuck
+      }
+      if (false) {  // dead code to close original else block
         setSession(null);
       }
       setReady(true);
