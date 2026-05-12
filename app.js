@@ -1,4 +1,4 @@
-var useState=React.useState;var useEffect=React.useEffect;var useRef=React.useRef;var createContext=React.createContext;var useContext=React.useContext;var createClient=window.supabase.createClient;var createClient=window.supabase.createClient;
+var useState=React.useState;var useEffect=React.useEffect;var useRef=React.useRef;var createContext=React.createContext;var useContext=React.useContext;var createClient=window.supabase.createClient;
 function famLog(msg){console.log("[FAM]",msg);var e=document.getElementById("fam-status");if(e)e.textContent=msg;}
 class SectionErrorBoundary extends React.Component{constructor(props){super(props);this.state={hasError:false,error:null};}static getDerivedStateFromError(e){return{hasError:true,error:e};}componentDidCatch(e,i){console.error("[FAM]",e,i);}render(){if(this.state.hasError){return React.createElement("div",{style:{padding:"32px",margin:"24px",background:"#FFF5F5",border:"1px solid #FCA5A5",borderRadius:"12px",fontFamily:"Georgia,serif"}},React.createElement("div",{style:{fontWeight:700,color:"#C94F4F",marginBottom:8}},"Something went wrong in this section"),React.createElement("div",{style:{fontSize:13,color:"#666",marginBottom:16,fontFamily:"monospace",background:"#f5f5f5",padding:"8px 12px",borderRadius:6}},this.state.error&&this.state.error.message),React.createElement("button",{onClick:()=>this.setState({hasError:false,error:null}),style:{padding:"8px 20px",borderRadius:8,border:"none",background:"#E8734A",color:"#fff",cursor:"pointer",fontFamily:"inherit",fontWeight:700}},"Try again"));}return this.props.children;}}
 // ╔══════════════════════════════════════════════════════════════╗
@@ -40,7 +40,7 @@ class SectionErrorBoundary extends React.Component{constructor(props){super(prop
 // ╔══════════════════════════════════════════════════════════════╗
 // ║              SUPABASE SETUP — READ BEFORE LAUNCH             ║
 // ╠══════════════════════════════════════════════════════════════╣
-// ║  1. Create a free Supabase project at https://supabase.com   ║
+// ║  1. Create a free Supabase project at https://_supabaseClient.com   ║
 // ║                                                              ║
 // ║  2. In the SQL editor, run this schema:                      ║
 // ║                                                              ║
@@ -114,7 +114,7 @@ class SectionErrorBoundary extends React.Component{constructor(props){super(prop
 // ║  4. In Auth → Settings, enable email/password sign-ins.      ║
 // ╚══════════════════════════════════════════════════════════════╝
 
-const SUPABASE_URL = "https://whjrsccqiqhzxxeqxqwi.supabase.co"; // ← replace
+const SUPABASE_URL = "https://YOUR_PROJECT._supabaseClient.co"; // ← replace
 const SUPABASE_ANON_KEY = "sb_publishable_ScETMI7MwyhIvi5uxubc-A_PYLlMbcw"; // ← replace
 
 const _supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -122,11 +122,11 @@ const _supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Helper: fetch the family row + memberships for the signed-in user.
 // Returns { user, family, memberships, users } or null on error.
 async function loadUserSession(sbUser) {
-  famLog('Loading session for ' + sbUser.email + '...');
+  famLog('Loading session...');
   const { data: mems, error: memErr } = await _supabaseClient.from("memberships").select("*").eq("user_id", sbUser.id);
-  if (memErr) { famLog('Membership error: ' + memErr.message); return null; }
+  if (memErr) { famLog('DB error: ' + memErr.message); return null; }
   if (!mems || !mems.length) { famLog('No membership found'); return null; }
-  famLog('Membership found. Loading family...');
+  famLog('Found family, loading data...');
   const familyId = mems[0].family_id;
 
   // 2. Get the family row
@@ -1195,7 +1195,7 @@ function InviteJoin({
 // ── Google Calendar integration ───────────────────────────────
 // All Google Calendar API calls go through the Supabase Edge Function.
 
-const GCAL_FUNCTION_URL = "https://whjrsccqiqhzxxeqxqwi.supabase.co/functions/v1/google-calendar-auth";
+const GCAL_FUNCTION_URL = "https://whjrsccqiqhzxxeqxqwi._supabaseClient.co/functions/v1/google-calendar-auth";
 
 // Helper: call the Edge Function with the user's auth token
 async function gcalCall(action, method = "GET", body = null) {
