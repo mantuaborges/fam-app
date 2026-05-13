@@ -123,9 +123,20 @@ const _supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Returns { user, family, memberships, users } or null on error.
 async function loadUserSession(sbUser) {
   famLog("Loading session...");
-  const { data: mems, error: memErr } = await _supabaseClient.from("memberships").select("*").eq("user_id", sbUser.id);
-  if (memErr) { famLog("DB error: " + memErr.message); return null; }
-  if (!mems || !mems.length) { famLog("No membership found"); return null; }
+  // Race the query against a 5s timeout so we never hang forever
+  let memsResult;
+  try {
+    memsResult = await Promise.race([
+      _supabaseClient.from("memberships").select("*").eq("user_id", sbUser.id),
+      new Promise((_,reject) => setTimeout(()=>reject(new Error("Query timed out - check RLS policies")), 5000))
+    ]);
+  } catch(e) {
+    famLog("Error: " + e.message);
+    return null;
+  }
+  const { data: mems, error: memErr } = memsResult;
+  if (memErr) { famLog("DB error: " + memErr.message + " code:" + memErr.code); return null; }
+  if (!mems || !mems.length) { famLog("No membership found for this user"); return null; }
   famLog("Found family, loading data...");
   const familyId = mems[0].family_id;
 
@@ -15952,7 +15963,7 @@ function FamRoot() {
     // onAuthStateChange fires immediately with the persisted session.
     // We add a 6-second timeout so the app never gets stuck loading
     // (e.g. if Supabase tables haven't been created yet).
-    const timeout = setTimeout(() => setReady(true), 6000);
+    const timeout = setTimeout(() => { famLog("Timed out - showing login"); setReady(true); }, 4000);
     const {
       data: {
         subscription
