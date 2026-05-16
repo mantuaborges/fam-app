@@ -26,5 +26,55 @@
     "lifestyle",
     "productivity"
   ],
-  "lang": "en"
+  "lang": "en",
+  "shortcuts": [
+    {
+      "name": "Calendar",
+      "short_name": "Calendar",
+      "description": "Open the family calendar",
+      "url": "/fam-app/?section=calendar",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%23E8734A'/><text x='48' y='68' font-size='52' text-anchor='middle'>\ud83d\udcc5</text></svg>",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "To-Do",
+      "short_name": "To-Do",
+      "description": "Open family to-do list",
+      "url": "/fam-app/?section=todos",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%234A9B6F'/><text x='48' y='68' font-size='52' text-anchor='middle'>\u2705</text></svg>",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Grocery List",
+      "short_name": "Grocery",
+      "description": "Open the grocery list",
+      "url": "/fam-app/?section=grocery",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%234A7BB5'/><text x='48' y='68' font-size='52' text-anchor='middle'>\ud83d\uded2</text></svg>",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Meals & Kitchen",
+      "short_name": "Meals",
+      "description": "Open meals and kitchen planner",
+      "url": "/fam-app/?section=meals",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%23D4A843'/><text x='48' y='68' font-size='52' text-anchor='middle'>\ud83c\udf74</text></svg>",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
 }
