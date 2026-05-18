@@ -1,5 +1,5 @@
-// Fam PWA Service Worker
-const CACHE_NAME = "fam-v1";
+// Fam PWA Service Worker — with Push Notification support
+const CACHE_NAME = "fam-v2";
 const URLS_TO_CACHE = [
   "/fam-app/",
   "/fam-app/index.html",
@@ -8,17 +8,15 @@ const URLS_TO_CACHE = [
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"
 ];
 
-// Install: cache core assets
+// ── Install ───────────────────────────────────────────────────
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(URLS_TO_CACHE).catch(() => {});
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(URLS_TO_CACHE).catch(() => {}))
   );
   self.skipWaiting();
 });
 
-// Activate: clean up old caches
+// ── Activate ──────────────────────────────────────────────────
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -28,9 +26,8 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
-// Fetch: serve from cache, fall back to network
+// ── Fetch ─────────────────────────────────────────────────────
 self.addEventListener("fetch", event => {
-  // Skip non-GET and Supabase/API requests (always need network)
   if (event.request.method !== "GET") return;
   if (event.request.url.includes("supabase.co")) return;
   if (event.request.url.includes("api.anthropic.com")) return;
@@ -40,13 +37,61 @@ self.addEventListener("fetch", event => {
     caches.match(event.request).then(cached => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
-        // Cache successful responses for app shell
         if (response && response.status === 200 && response.type === "basic") {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
       }).catch(() => caches.match("/fam-app/index.html"));
+    })
+  );
+});
+
+// ── Push notifications ────────────────────────────────────────
+self.addEventListener("push", event => {
+  let data = { title: "Fam", body: "You have a new reminder" };
+
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body:             data.body,
+    icon:             "/fam-app/manifest.json",
+    badge:            "/fam-app/manifest.json",
+    tag:              data.tag  || "fam-notification",
+    data:             data.data || { url: "/fam-app/" },
+    requireInteraction: false,
+    vibrate:          [200, 100, 200],
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// ── Notification click — open the app ────────────────────────
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+
+  const url = event.notification.data?.url || "/fam-app/";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(clientList => {
+      // If app is already open, focus it and navigate
+      for (const client of clientList) {
+        if (client.url.includes("fam-app") && "focus" in client) {
+          client.focus();
+          client.postMessage({ type: "NAVIGATE", url });
+          return;
+        }
+      }
+      // Otherwise open a new tab
+      if (clients.openWindow) return clients.openWindow(url);
     })
   );
 });
