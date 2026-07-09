@@ -2261,7 +2261,7 @@ function Finance(){
     var periodLabel=periodFromDates(preTxs);
     var newTxs=preTxs.map(function(t){
       var raw=typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0);
-      var isInc=t.direction==="in"||raw>0;
+      var isInc=t.direction?t.direction==="in":raw>0;
       var amt=isInc?Math.abs(raw):-Math.abs(raw);
       var cat=finGuessCat(t.description||t.desc||"",isInc);
       return {id:uid(),date:String(t.date||"").trim(),description:(String(t.description||t.desc||"")).substring(0,200).trim()||"(sem descricao)",amount:amt,category:cat,categorySource:"local",importId:importId};
@@ -2328,7 +2328,7 @@ function Finance(){
     preTxs.forEach(function(t,i){
       var aiT=aiTxs[i]||aiTxs.find(function(a){return a.description&&t.description&&a.description.substring(0,40)===t.description.substring(0,40);});
       var raw=typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0);
-      var isInc=t.direction==="in"||raw>0;
+      var isInc=t.direction?t.direction==="in":raw>0;
       var cat=aiT?(FIN_CATS.find(function(c){return c.id===aiT.category;})?aiT.category:"Outros"):finGuessCat(t.description||t.desc||"",isInc);
       var amt=Math.abs(raw);
       if(isInc){incMap[cat]=(incMap[cat]||0)+amt;totalInc+=amt;}
@@ -2429,7 +2429,7 @@ function Finance(){
   function reanalizeImport(imp){
     var txsForImport=transactions.filter(function(t){return t.importId===imp.id;});
     if(!txsForImport.length){flash("Nenhuma transacao encontrada para este extrato.");return;}
-    var preTxs=txsForImport.map(function(t){return {description:t.description,amount:t.amount,date:t.date};});
+    var preTxs=txsForImport.map(function(t){return {description:t.description,amount:t.amount,date:t.date,direction:t.amount>=0?"in":"out"};});
     var periodLabel=imp.periodLabel||periodFromDates(preTxs);
     enrichAsync(imp.id,preTxs,imp.filename,periodLabel);
   }
