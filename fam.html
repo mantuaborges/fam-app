@@ -2265,6 +2265,10 @@ function Finance(){
           var ws=wb.Sheets[wb.SheetNames[0]];
           var rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false});
           var result=finRowsToTx(rows);
+          if(result.transactions.length===0){
+            var rawText=rows.map(function(r){return r.join("\t");}).join("\n");
+            runAiParse(rawText,file.name);return;
+          }
           runAiAnalysis(result.transactions,file.name);
         }catch(err){flash("Erro ao ler Excel: "+(err.message||err));}
       };
