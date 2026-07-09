@@ -2275,66 +2275,54 @@ function Finance(){
 
   async function enrichAsync(importId,preTxs,filename,periodLabel){
     setAiEnriching(true);
-    var catList=FIN_CATS.map(function(x){return x.id;}).join(", ");
-    // Deduplicate by normalised description key — numbered list avoids JSON key escaping issues
+    var catList=FIN_CATS.map(function(x){return x.id;}).join("|");
     var keyMap={};var uniqKeys=[];var uniqDescs=[];
     preTxs.forEach(function(t){
       var key=finDeaccent((t.description||t.desc||"").substring(0,50).toLowerCase().trim());
-      if(key&&!keyMap.hasOwnProperty(key)){keyMap[key]=uniqKeys.length;uniqKeys.push(key);uniqDescs.push((t.description||t.desc||"").substring(0,80));}
+      if(key&&!keyMap.hasOwnProperty(key)){keyMap[key]=uniqKeys.length;uniqKeys.push(key);uniqDescs.push((t.description||t.desc||"").substring(0,70));}
     });
-    var sample=uniqDescs.slice(0,55);
-    var sampleKeys=uniqKeys.slice(0,55);
+    var N=Math.min(uniqDescs.length,55);
+    var sampleKeys=uniqKeys.slice(0,N);
+    var numberedList=uniqDescs.slice(0,N).map(function(d,i){return (i+1)+". "+d;}).join("\n");
     var totExp=0,totInc=0;
     preTxs.forEach(function(t){var a=typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0);if(a<0)totExp+=Math.abs(a);else totInc+=a;});
-    var ctx2=preTxs.length+" transacoes. Despesas: "+totExp.toFixed(2)+"EUR. Receitas: "+totInc.toFixed(2)+"EUR. Periodo: "+periodLabel;
-    var numberedList=sample.map(function(d,i){return (i+1)+". "+d;}).join("\n");
-    var sys="You are a family accountant. Return ONLY valid JSON, no markdown, no extra text.\nJSON structure: {\"cats\":[\"Cat1\",\"Cat2\",...],\"period_label\":\"...\",\"summary\":\"...\",\"recommendations\":[\"...\"]}\ncats = array of exactly "+sample.length+" category strings, one per numbered merchant below, in the same order.\nEach category must be one of: "+catList+"\nContext: "+ctx2+"\nsummary: 3-5 sentences as an accountant. Reference actual % of spending. Finish with income vs expense balance.\nrecommendations: 3 to 5 specific tips based on the actual spending breakdown.";
     try{
-      var resp=await callClaude(sys,"Categorize each merchant (return array of "+sample.length+" categories in order):\n\n"+numberedList,2000);
-      var j0=resp.indexOf("{");var j1=resp.lastIndexOf("}")+1;
-      if(j0<0||j1<=j0)throw new Error("Resposta invalida da IA");
-      var parsed=JSON.parse(resp.substring(j0,j1));
-      var cats=Array.isArray(parsed.cats)?parsed.cats:[];
-      // Build lookup: normKey -> category
+      var sys1="Return ONLY a JSON array of exactly "+N+" strings, one category per numbered merchant below in the same order. No other text. No markdown. Each value must be exactly one of: "+catList;
+      var resp1=await callClaude(sys1,"Categorize:\n\n"+numberedList,900);
+      var a0=resp1.indexOf("[");var a1=resp1.lastIndexOf("]")+1;
+      if(a0<0||a1<=a0)throw new Error("Sem array de categorias na resposta");
+      var cats=JSON.parse(resp1.substring(a0,a1));
+      if(!Array.isArray(cats))throw new Error("Array de categorias invalido");
       var catLookup={};
       sampleKeys.forEach(function(k,i){
-        var cat=cats[i]||"Outros";
-        var validCat=FIN_CATS.find(function(c){return c.id===cat;});
-        catLookup[k]=validCat?cat:"Outros";
+        var cat=String(cats[i]||"Outros").trim();
+        var valid=FIN_CATS.find(function(c){return c.id===cat;});
+        catLookup[k]=valid?cat:"Outros";
       });
-      // Map back to all transactions
       var fakeAiTxs=preTxs.map(function(t){
         var key=finDeaccent((t.description||t.desc||"").substring(0,50).toLowerCase().trim());
-        var cat=catLookup[key]||"Outros";
-        return {description:t.description||t.desc,category:cat};
+        return {description:t.description||t.desc,category:catLookup[key]||finGuessCat(t.description||t.desc||"",false)};
       });
-      applyEnrichment(importId,{transactions:fakeAiTxs,period_label:parsed.period_label,summary:parsed.summary,recommendations:parsed.recommendations},preTxs);
+      applyEnrichment(importId,{transactions:fakeAiTxs,period_label:periodLabel,summary:"",recommendations:[]},preTxs);
+      try{
+        var expMapN={};var totExpN=0;
+        preTxs.forEach(function(t,i){var cat=fakeAiTxs[i].category;var a=typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0);if(a<0){expMapN[cat]=(expMapN[cat]||0)+Math.abs(a);totExpN+=Math.abs(a);}});
+        var bStr=Object.keys(expMapN).sort(function(a,b){return expMapN[b]-expMapN[a];}).slice(0,6).map(function(k){return k+"("+(totExpN>0?Math.round(expMapN[k]/totExpN*100):0)+"%)";}).join(", ");
+        var sys2="You are a family accountant. Reply with ONLY a single-line JSON object, no newlines inside strings, no markdown: {\"summary\":\"3-5 sentences\",\"recommendations\":[\"tip1\",\"tip2\",\"tip3\"]}";
+        var msg2="Period: "+periodLabel+". "+preTxs.length+" transactions. Expenses: "+totExp.toFixed(2)+" EUR. Income: "+totInc.toFixed(2)+" EUR. Top expense categories: "+bStr+". Write in European Portuguese.";
+        var resp2=await callClaude(sys2,msg2,1200);
+        var b0=resp2.indexOf("{");var b1=resp2.lastIndexOf("}")+1;
+        if(b0>=0&&b1>b0){
+          var p2=JSON.parse(resp2.substring(b0,b1));
+          setAiAna(function(prev){return prev?Object.assign({},prev,{summary:p2.summary||"",recommendations:p2.recommendations||[]}):prev;});
+        }
+      }catch(e2){}
     }catch(err){
       setRetryBanner({importId:importId,preTxs:preTxs,filename:filename,periodLabel:periodLabel,errMsg:err.message||String(err)});
     }
     setAiEnriching(false);
   }
-
-  function applyEnrichment(importId,parsed,preTxs){
-    var aiTxs=parsed.transactions||[];
-    var expMap={},incMap={},totalExp=0,totalInc=0;
-    preTxs.forEach(function(t,i){
-      var aiT=aiTxs[i]||aiTxs.find(function(a){return a.description&&t.description&&a.description.substring(0,40)===t.description.substring(0,40);});
-      var raw=typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0);
-      var isInc=t.direction==="in"||raw>0;
-      var cat=aiT?(FIN_CATS.find(function(c){return c.id===aiT.category;})?aiT.category:"Outros"):finGuessCat(t.description||t.desc||"",isInc);
-      var amt=Math.abs(raw);
-      if(isInc){incMap[cat]=(incMap[cat]||0)+amt;totalInc+=amt;}
-      else{expMap[cat]=(expMap[cat]||0)+amt;totalExp+=amt;}
-    });
-    function toArr(map,total){var a=[];for(var k in map){a.push({cat:k,total:map[k],pct:total>0?Math.round(map[k]/total*100):0});}return a.sort(function(a,b){return b.total-a.total;});}
-    var periodLabel=parsed.period_label||periodFromDates(preTxs);
-    setRetryBanner(null);
-    setAiAna({importId:importId,periodSummary:periodLabel,periodLabel:periodLabel,summary:parsed.summary||"",recommendations:parsed.recommendations||[],expBreakdown:toArr(expMap,totalExp),incBreakdown:toArr(incMap,totalInc),count:preTxs.length,totalExp:totalExp,totalInc:totalInc});
-    flash("Analise IA concluida.");
-  }
-
-  async function retryEnrichment(){
+    async function retryEnrichment(){
     if(!retryBanner)return;
     var rb=retryBanner;
     setRetryBanner(null);
