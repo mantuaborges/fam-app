@@ -2350,9 +2350,10 @@ function Finance(){
           var result=finRowsToTx(rows);
           if(result.transactions.length===0){
             var rawText=rows.map(function(r){return r.join("\t");}).join("\n");
-            runAiParse(rawText,file.name);return;
+            runAiOnlyParse(rawText,file.name);return;
           }
-          runAiAnalysis(result.transactions,file.name);
+          var saved=saveLocalImport(result.transactions,file.name);
+          if(saved)enrichAsync(saved.importId,result.transactions,file.name,saved.periodLabel);
         }catch(err){flash("Erro ao ler Excel: "+(err.message||err));}
       };
       r2.readAsArrayBuffer(file);
