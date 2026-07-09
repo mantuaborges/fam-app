@@ -2276,31 +2276,37 @@ function Finance(){
   async function enrichAsync(importId,preTxs,filename,periodLabel){
     setAiEnriching(true);
     var catList=FIN_CATS.map(function(x){return x.id;}).join(", ");
-    // Deduplicate by description — send unique merchants only (much smaller payload)
-    var seen={};var uniq=[];
+    // Deduplicate by normalised description key — numbered list avoids JSON key escaping issues
+    var keyMap={};var uniqKeys=[];var uniqDescs=[];
     preTxs.forEach(function(t){
-      var key=(t.description||t.desc||"").substring(0,60).toLowerCase().trim();
-      if(!seen[key]&&key){seen[key]=true;uniq.push({date:t.date||"",desc:(t.description||t.desc||"").substring(0,80),amount:typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0)});}
+      var key=finDeaccent((t.description||t.desc||"").substring(0,50).toLowerCase().trim());
+      if(key&&!keyMap.hasOwnProperty(key)){keyMap[key]=uniqKeys.length;uniqKeys.push(key);uniqDescs.push((t.description||t.desc||"").substring(0,80));}
     });
-    var sample=uniq.slice(0,60);
-    var lines=sample.map(function(t){return (t.date||"")+" | "+t.desc+" | "+t.amount;}).join("\n");
-    // Build totals for summary context
+    var sample=uniqDescs.slice(0,55);
+    var sampleKeys=uniqKeys.slice(0,55);
     var totExp=0,totInc=0;
     preTxs.forEach(function(t){var a=typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0);if(a<0)totExp+=Math.abs(a);else totInc+=a;});
-    var ctx2=preTxs.length+" transacoes. Total despesas: "+totExp.toFixed(2)+"EUR. Total receitas: "+totInc.toFixed(2)+"EUR. Periodo: "+periodLabel;
-    var sys="Family accountant reviewing a Portuguese bank statement. Return ONLY valid JSON, no markdown.\nJSON: {\"catMap\":{\"description snippet\":\"Category\"},\"period_label\":\"...\",\"summary\":\"...\",\"recommendations\":[\"...\"]}\ncatMap keys = first 60 chars of description (lowercase). Values must be one of: "+catList+"\nContext: "+ctx2+"\nsummary: 3-5 sentences, reference actual % of spending, note anything unusual, finish with income vs expense balance.\nrecommendations: 3 to 5 specific tips based on the actual spending breakdown.";
+    var ctx2=preTxs.length+" transacoes. Despesas: "+totExp.toFixed(2)+"EUR. Receitas: "+totInc.toFixed(2)+"EUR. Periodo: "+periodLabel;
+    var numberedList=sample.map(function(d,i){return (i+1)+". "+d;}).join("\n");
+    var sys="You are a family accountant. Return ONLY valid JSON, no markdown, no extra text.\nJSON structure: {\"cats\":[\"Cat1\",\"Cat2\",...],\"period_label\":\"...\",\"summary\":\"...\",\"recommendations\":[\"...\"]}\ncats = array of exactly "+sample.length+" category strings, one per numbered merchant below, in the same order.\nEach category must be one of: "+catList+"\nContext: "+ctx2+"\nsummary: 3-5 sentences as an accountant. Reference actual % of spending. Finish with income vs expense balance.\nrecommendations: 3 to 5 specific tips based on the actual spending breakdown.";
     try{
-      var resp=await callClaude(sys,"Categorize these unique merchants and provide analysis:\n\n"+lines,2000);
+      var resp=await callClaude(sys,"Categorize each merchant (return array of "+sample.length+" categories in order):\n\n"+numberedList,2000);
       var j0=resp.indexOf("{");var j1=resp.lastIndexOf("}")+1;
       if(j0<0||j1<=j0)throw new Error("Resposta invalida da IA");
       var parsed=JSON.parse(resp.substring(j0,j1));
-      // Convert catMap to transactions array format applyEnrichment expects
-      var catMap=parsed.catMap||{};
-      var fakeAiTxs=preTxs.map(function(t){
-        var key=(t.description||t.desc||"").substring(0,60).toLowerCase().trim();
-        var cat=catMap[key]||catMap[Object.keys(catMap).find(function(k){return key.indexOf(k)>=0||k.indexOf(key)>=0;})||""]||"Outros";
+      var cats=Array.isArray(parsed.cats)?parsed.cats:[];
+      // Build lookup: normKey -> category
+      var catLookup={};
+      sampleKeys.forEach(function(k,i){
+        var cat=cats[i]||"Outros";
         var validCat=FIN_CATS.find(function(c){return c.id===cat;});
-        return {description:t.description||t.desc,category:validCat?cat:"Outros"};
+        catLookup[k]=validCat?cat:"Outros";
+      });
+      // Map back to all transactions
+      var fakeAiTxs=preTxs.map(function(t){
+        var key=finDeaccent((t.description||t.desc||"").substring(0,50).toLowerCase().trim());
+        var cat=catLookup[key]||"Outros";
+        return {description:t.description||t.desc,category:cat};
       });
       applyEnrichment(importId,{transactions:fakeAiTxs,period_label:parsed.period_label,summary:parsed.summary,recommendations:parsed.recommendations},preTxs);
     }catch(err){
