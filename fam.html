@@ -2426,7 +2426,15 @@ function Finance(){
     setAiLoading(false);
   }
 
-  function deleteImport(importId){
+  function reanalizeImport(imp){
+    var txsForImport=transactions.filter(function(t){return t.importId===imp.id;});
+    if(!txsForImport.length){flash("Nenhuma transacao encontrada para este extrato.");return;}
+    var preTxs=txsForImport.map(function(t){return {description:t.description,amount:t.amount,date:t.date};});
+    var periodLabel=imp.periodLabel||periodFromDates(preTxs);
+    enrichAsync(imp.id,preTxs,imp.filename,periodLabel);
+  }
+
+    function deleteImport(importId){
     saveFin({transactions:transactions.filter(function(t){return t.importId!==importId;}),imports:imports.filter(function(i){return i.id!==importId;})});
     if(aiAna&&aiAna.importId===importId)setAiAna(null);
     if(retryBanner&&retryBanner.importId===importId)setRetryBanner(null);
@@ -2542,7 +2550,7 @@ function Finance(){
           CE("div",{style:{font:"500 12px var(--font-ui)"}},imp.filename),
           CE("div",{style:{font:"400 11px var(--font-ui)",color:"var(--ink-3)",marginTop:2}},imp.count+" transações · "+imp.date)
         ),
-        CE("button",{className:"btn btn--ghost btn--sm btn--danger",style:{fontSize:11},onClick:function(){deleteImport(imp.id);}},"Apagar")
+        CE("div",{style:{display:"flex",gap:6}},CE("button",{className:"btn btn--ghost btn--sm",style:{fontSize:11},disabled:aiEnriching,onClick:function(){reanalizeImport(imp);}},aiEnriching?"A analisar...":"Reanalisar IA"),CE("button",{className:"btn btn--ghost btn--sm btn--danger",style:{fontSize:11},onClick:function(){deleteImport(imp.id);}},"Apagar"))
       );
     }))
   ):null;
