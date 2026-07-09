@@ -2276,16 +2276,35 @@ function Finance(){
   async function enrichAsync(importId,preTxs,filename,periodLabel){
     setAiEnriching(true);
     var catList=FIN_CATS.map(function(x){return x.id;}).join(", ");
-    var lines=preTxs.map(function(t){return (t.date||"")+" | "+(t.description||t.desc||"")+" | "+(t.amount||0);}).join("\n");
-    var sys="You are a family accountant reviewing a Portuguese bank statement. Return ONLY valid JSON with NO markdown.\nJSON: {\"transactions\":[{\"date\":\"YYYY-MM-DD\",\"description\":\"...\",\"amount\":0.00,\"category\":\"...\"}],\"period_label\":\"...\",\"summary\":\"...\",\"recommendations\":[\"...\"]}\nCategories (use EXACTLY one of these): "+catList+"\nRules:\n- amount: negative=expense, positive=income\n- If no category matches, use Outros\n- summary: 3 to 5 sentences written as a family accountant. Reference actual percentages of total spending (ex: As despesas com Alimentacao representam 35% do total). Note anything unusual. Finish with income vs expense balance for the period.\n- recommendations: 3 to 5 specific, actionable tips grounded in the actual category breakdown of this statement\n- period_label: human-readable period in Portuguese";
+    // Deduplicate by description — send unique merchants only (much smaller payload)
+    var seen={};var uniq=[];
+    preTxs.forEach(function(t){
+      var key=(t.description||t.desc||"").substring(0,60).toLowerCase().trim();
+      if(!seen[key]&&key){seen[key]=true;uniq.push({date:t.date||"",desc:(t.description||t.desc||"").substring(0,80),amount:typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0)});}
+    });
+    var sample=uniq.slice(0,60);
+    var lines=sample.map(function(t){return (t.date||"")+" | "+t.desc+" | "+t.amount;}).join("\n");
+    // Build totals for summary context
+    var totExp=0,totInc=0;
+    preTxs.forEach(function(t){var a=typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0);if(a<0)totExp+=Math.abs(a);else totInc+=a;});
+    var ctx2=preTxs.length+" transacoes. Total despesas: "+totExp.toFixed(2)+"EUR. Total receitas: "+totInc.toFixed(2)+"EUR. Periodo: "+periodLabel;
+    var sys="Family accountant reviewing a Portuguese bank statement. Return ONLY valid JSON, no markdown.\nJSON: {\"catMap\":{\"description snippet\":\"Category\"},\"period_label\":\"...\",\"summary\":\"...\",\"recommendations\":[\"...\"]}\ncatMap keys = first 60 chars of description (lowercase). Values must be one of: "+catList+"\nContext: "+ctx2+"\nsummary: 3-5 sentences, reference actual % of spending, note anything unusual, finish with income vs expense balance.\nrecommendations: 3 to 5 specific tips based on the actual spending breakdown.";
     try{
-      var resp=await callClaude(sys,"Categorize and analyse these transactions (period: "+periodLabel+"):\n\n"+lines,3000);
+      var resp=await callClaude(sys,"Categorize these unique merchants and provide analysis:\n\n"+lines,2000);
       var j0=resp.indexOf("{");var j1=resp.lastIndexOf("}")+1;
       if(j0<0||j1<=j0)throw new Error("Resposta invalida da IA");
       var parsed=JSON.parse(resp.substring(j0,j1));
-      applyEnrichment(importId,parsed,preTxs);
+      // Convert catMap to transactions array format applyEnrichment expects
+      var catMap=parsed.catMap||{};
+      var fakeAiTxs=preTxs.map(function(t){
+        var key=(t.description||t.desc||"").substring(0,60).toLowerCase().trim();
+        var cat=catMap[key]||catMap[Object.keys(catMap).find(function(k){return key.indexOf(k)>=0||k.indexOf(key)>=0;})||""]||"Outros";
+        var validCat=FIN_CATS.find(function(c){return c.id===cat;});
+        return {description:t.description||t.desc,category:validCat?cat:"Outros"};
+      });
+      applyEnrichment(importId,{transactions:fakeAiTxs,period_label:parsed.period_label,summary:parsed.summary,recommendations:parsed.recommendations},preTxs);
     }catch(err){
-      setRetryBanner({importId:importId,preTxs:preTxs,filename:filename,periodLabel:periodLabel});
+      setRetryBanner({importId:importId,preTxs:preTxs,filename:filename,periodLabel:periodLabel,errMsg:err.message||String(err)});
     }
     setAiEnriching(false);
   }
@@ -2431,7 +2450,7 @@ function Finance(){
   var retryBannerEl=retryBanner?CE("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#FFF4E5",border:"1px solid #FBBF24",borderRadius:8,padding:"12px 16px",marginBottom:16,gap:12,flexWrap:"wrap"}},
     CE("div",null,
       CE("div",{style:{font:"500 13px var(--font-ui)",color:"#92400E",marginBottom:2}},"Transacoes guardadas com categorias locais"),
-      CE("div",{style:{font:"400 12px var(--font-ui)",color:"#B45309"}},retryBanner.preTxs.length+" transacoes importadas. Analise IA nao concluida.")
+      CE("div",{style:{font:"400 12px var(--font-ui)",color:"#B45309"}},retryBanner.preTxs.length+" transacoes importadas. "+(retryBanner.errMsg?"Erro: "+retryBanner.errMsg:"Analise IA nao concluida."))
     ),
     CE("div",{style:{display:"flex",gap:8,flexShrink:0}},
       CE("button",{className:"btn btn--sm",style:{background:"#E8734A",color:"#fff",border:"none"},onClick:retryEnrichment},aiEnriching?"A tentar...":"Tentar novamente"),
