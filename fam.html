@@ -2322,6 +2322,24 @@ function Finance(){
     }
     setAiEnriching(false);
   }
+    function applyEnrichment(importId,parsed,preTxs){
+    var aiTxs=parsed.transactions||[];
+    var expMap={},incMap={},totalExp=0,totalInc=0;
+    preTxs.forEach(function(t,i){
+      var aiT=aiTxs[i]||aiTxs.find(function(a){return a.description&&t.description&&a.description.substring(0,40)===t.description.substring(0,40);});
+      var raw=typeof t.amount==="number"?t.amount:(parseFloat(String(t.amount||"0").replace(",","."))||0);
+      var isInc=t.direction==="in"||raw>0;
+      var cat=aiT?(FIN_CATS.find(function(c){return c.id===aiT.category;})?aiT.category:"Outros"):finGuessCat(t.description||t.desc||"",isInc);
+      var amt=Math.abs(raw);
+      if(isInc){incMap[cat]=(incMap[cat]||0)+amt;totalInc+=amt;}
+      else{expMap[cat]=(expMap[cat]||0)+amt;totalExp+=amt;}
+    });
+    function toArr(map,total){var a=[];for(var k in map){a.push({cat:k,total:map[k],pct:total>0?Math.round(map[k]/total*100):0});}return a.sort(function(a,b){return b.total-a.total;});}
+    var periodLabel=parsed.period_label||periodFromDates(preTxs);
+    setRetryBanner(null);
+    setAiAna({importId:importId,periodSummary:periodLabel,periodLabel:periodLabel,summary:parsed.summary||"",recommendations:parsed.recommendations||[],expBreakdown:toArr(expMap,totalExp),incBreakdown:toArr(incMap,totalInc),count:preTxs.length,totalExp:totalExp,totalInc:totalInc});
+    flash("Analise IA concluida.");
+  }
     async function retryEnrichment(){
     if(!retryBanner)return;
     var rb=retryBanner;
